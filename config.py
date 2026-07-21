@@ -2,10 +2,10 @@
 import os
 
 ACTIVE_SITES = ['mstc', 'metaljunction', 'ireps']
-TWOCAPTCHA_API_KEY = "***REMOVED***"
+TWOCAPTCHA_API_KEY = ""
 
 # --- IREPS CREDENTIALS ---
-IREPS_MOBILE = "***REMOVED***"
+IREPS_MOBILE = ""
 
 # --- MSTC SETTINGS ---
 TARGET_LOCATIONS = [
@@ -19,13 +19,13 @@ DOWNLOAD_DIR = os.path.join(BASE_DIR, "temp_downloads")
 OUTPUT_SUMMARY_PATH = os.path.join(BASE_DIR, "Auction_Summary_Report.pdf")
 
 # Meta WhatsApp Business API Credentials 
-WA_PHONE_ID = "***REMOVED***"
-WA_BUSINESS_ID = "***REMOVED***"
+WA_PHONE_ID = ""
+WA_BUSINESS_ID = ""
 # Keep your actual long token here
-WA_TOKEN = "***REMOVED***"
-WA_TEMPLATE = "declartion"
+WA_TOKEN = ""
+WA_TEMPLATE = ""
 WA_LANG = "en"
-SEND_TO_NUMBER = "***REMOVED***"
+SEND_TO_NUMBER = "918"
 
 # Google API Integration Configuration
 SCOPES = [
