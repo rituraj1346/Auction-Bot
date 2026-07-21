@@ -1,0 +1,21 @@
+# Security & Credentials (CRITICAL)
+config.py
+token.json
+credentials.json
+.env
+
+# Downloaded Auction Files
+*.pdf
+downloads/
+Downloads/
+
+# Python Cache & Virtual Environments
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+
+# OS Junk Files
+.DS_Store
+Thumbs.db
