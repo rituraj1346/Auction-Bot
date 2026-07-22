@@ -299,14 +299,25 @@ def run_catalogues_downloader():
                         
                         time.sleep(6)
                         
+                        # --- NEW: Smart OTP Alert Handler (No Pause) ---
                         try:
                             alert = driver.switch_to.alert
+                            alert_text = alert.text
                             alert.accept()
-                            if any(x in alert_text.lower() for x in ["invalid", "wrong", "match"]):
+                            
+                            if "maximum" in alert_text.lower() or "limit" in alert_text.lower():
+                                print(f"ℹ️ Intercepted: '{alert_text}'.")
+                                print("Proceeding to login using the existing valid OTP from Gmail...")
+                                # We do NOTHING here. The code will naturally drop down to fetch_ireps_otp.
+                                
+                            elif any(x in alert_text.lower() for x in ["invalid", "wrong", "match"]):
+                                print(f"⚠️ Intercepted Captcha Error: '{alert_text}'. Retrying...")
                                 driver.find_element(By.XPATH, "//*[contains(@onclick, 'captcha') or contains(@class, 'refresh')]").click()
                                 time.sleep(3)
                                 continue
-                        except: pass
+                        except: 
+                            pass # No alert present, move on safely
+                        # -----------------------------------------------
                         
                         retrieved_otp = fetch_ireps_otp(creds, retries=15)
                         captcha_solved = True
@@ -344,44 +355,65 @@ def run_catalogues_downloader():
                 driver.execute_script("arguments[0].click();", forthcoming_tab)
                 time.sleep(5)
                 
-                # --- NEW: Replaced Dropdowns with Search Box Injection ---
-                print("Applying Target Filter via Table Search Box...")
-                try:
-                    search_input = wait.until(EC.presence_of_element_located((By.XPATH, "//label[contains(text(), 'Search')]/input | //input[@type='search']")))
-                    search_input.clear()
-                    search_input.send_keys("N F RLY")
-                    time.sleep(3)
-                except Exception as e:
-                    print(f"Warning: Could not locate table search box. {e}")
+              # --- REMOVED SEARCH BOX INJECTION ---
                 
+                print("Expanding table to show 100 entries so Python can scan everything...")
                 try:
+                    from selenium.webdriver.support.ui import Select # Added this import to prevent a NameError!
                     entries_select = Select(driver.find_element(By.XPATH, "//select[contains(@name, 'length')]"))
                     entries_select.select_by_visible_text("100")
                     time.sleep(3)
-                except: pass
+                except Exception as e: 
+                    print(f"Warning: Could not change dropdown to 100. {e}")
                 
                 grid_rows = driver.find_elements(By.XPATH, "//table[contains(@class, 'dataTable') or contains(@id, 'table')]/tbody/tr")
                 total_records = len(grid_rows)
-                print(f"Targeting {total_records} upcoming N F RLY catalogues for today.")
+                print(f"Scanning all {total_records} upcoming catalogues on the page for 'N F RLY'...")
                 
                 for idx in range(total_records):
+                    # --- NEW: Force table back to 100 entries after navigating back! ---
+                    try:
+                        from selenium.webdriver.support.ui import Select
+                        entries_select = Select(driver.find_element(By.XPATH, "//select[contains(@name, 'length')]"))
+                        # If the dropdown reset to 10 after pressing 'back', fix it:
+                        if entries_select.first_selected_option.text != "100":
+                            print("Restoring table view to 100 entries...")
+                            entries_select.select_by_visible_text("100")
+                            time.sleep(3)
+                    except: pass
+                    # -------------------------------------------------------------------
+                    
+                    # Re-fetch rows inside the loop to avoid StaleElementReferenceException
                     current_snapshot_rows = driver.find_elements(By.XPATH, "//table[contains(@class, 'dataTable') or contains(@id, 'table')]/tbody/tr")
-                    if idx >= len(current_snapshot_rows): break
+                    
+                    if idx >= len(current_snapshot_rows): 
+                        print(f"End of visible table reached at row {idx}. Breaking loop.")
+                        break
                     
                     row_cols = current_snapshot_rows[idx].find_elements(By.TAG_NAME, "td")
                     if len(row_cols) < 5: continue
                     
+                    # --- THE PYTHON FILTER ---
+                    # Check column 0 (Railway.) for the text "N F RLY"
+                    railway_name = row_cols[0].text.strip()
+                    
+                    if "N F RLY" not in railway_name:
+                        # If it is NOT N F RLY, skip to the next row silently
+                        continue 
+                        
                     schedule_no = row_cols[2].text.strip()
                     catalogue_text = row_cols[3].text.strip()
                     
-                    print(f"\nProcessing Row [{idx+1}/{total_records}] | Schedule ID: {schedule_no} | Catalogue: {catalogue_text}")
+                    print(f"\n✅ Found N F RLY Match! Processing Row [{idx+1}/{total_records}] | Schedule ID: {schedule_no} | Catalogue: {catalogue_text}")
                     
+                
                     # --- NEW: The Pre-Check Logic ---
                     if not check_if_calendar_event_exists(creds, schedule_no):
                         print(f"⏩ Schedule {schedule_no} not found in Calendar. Skipping as this is a non-target auction.")
                         continue
                     
                     try:
+                        # ALL of these lines must have the exact same starting column
                         catalogue_link = row_cols[3].find_element(By.TAG_NAME, "a")
                         driver.execute_script("arguments[0].click();", catalogue_link)
                         time.sleep(4)
@@ -392,16 +424,21 @@ def run_catalogues_downloader():
                         driver.execute_script("arguments[0].click();", print_btn)
                         time.sleep(4)
                         
-                        save_btn = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@value='Save To Computer']")))
-                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", save_btn)
-                        time.sleep(1)
-                        driver.execute_script("arguments[0].click();", save_btn)
+                        # --- NEW: Python Native Save (Bypasses broken JS button) ---
+                        print("Bypassing legacy JS save button. Writing HTML directly to disk...")
                         
-                        final_file_path = wait_for_download_and_rename(config.DOWNLOAD_DIR, schedule_no)
+                        html_content = driver.page_source
+                        final_file_path = os.path.join(config.DOWNLOAD_DIR, f"{schedule_no}.htm")
+                        
+                        with open(final_file_path, "w", encoding="utf-8") as f:
+                            f.write(html_content)
+                            
+                        print(f"✅ Saved safely by Python: {schedule_no}.htm")
+                        # -----------------------------------------------------------
                         
                         if final_file_path:
                             upload_and_link_to_calendar(creds, final_file_path, schedule_no)
-                        
+                            
                         print("Re-anchoring back onto dashboard interface...")
                         driver.back()
                         time.sleep(2)
