@@ -294,8 +294,10 @@ def run_catalogues_downloader():
                         captcha_input.send_keys(captcha_answer)
                         time.sleep(2)
                         
-                        try: driver.execute_script("sendOTP();")
-                        except: driver.find_element(By.XPATH, "//input[@value='Get OTP']").click()
+                        # --- NEW: Robust JS Element Click for Get OTP ---
+                        otp_btn = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@value='Get OTP' and @title='Send OTP']")))
+                        driver.execute_script("arguments[0].click();", otp_btn)
+                        # ------------------------------------------------
                         
                         time.sleep(6)
                         
@@ -454,7 +456,7 @@ def run_catalogues_downloader():
                         time.sleep(3)
                 
                 print("\n====================================================")
-                print("         CATALOGUE PURGE CYCLE CONCLUDED            ")
+                print("        CATALOGUE PURGE CYCLE CONCLUDED            ")
                 print("====================================================")
                 break
                 
