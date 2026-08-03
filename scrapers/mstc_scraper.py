@@ -29,10 +29,10 @@ def run_scraper():
     # Runs invisible by default. Shows UI only if '--visible' is typed in the terminal.
     import sys
     if "--visible" not in sys.argv:
-        print("🖥️ Running in Server Mode (Invisible Chrome)")
-        options.add_argument("--headless=new") 
-        options.add_argument("--no-sandbox") 
-        options.add_argument("--disable-dev-shm-usage")
+       print("[SERVER] Running in Server Mode (Invisible Chrome)")
+       options.add_argument("--headless=new")
+       options.add_argument("--no-sandbox") 
+       options.add_argument("--disable-dev-shm-usage")
     else:
         print("👀 Running in Manual Test Mode (Visible Chrome)")
 
