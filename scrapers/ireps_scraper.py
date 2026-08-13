@@ -251,6 +251,7 @@ def run_scraper():
                         print("Waiting 6 seconds for the server to process and dispatch the email...")
                         time.sleep(6)
                         
+                        limit_reached = False
                         try:
                             alert = driver.switch_to.alert
                             alert_text = alert.text
@@ -263,10 +264,19 @@ def run_scraper():
                                 driver.execute_script("arguments[0].click();", refresh_btn)
                                 time.sleep(3)
                                 continue
+                            # 🔴 FIX 1: Handle the "Maximum OTP limit exceeded" alert gracefully
+                            elif "maximum" in alert_text.lower() or "limit" in alert_text.lower() or "exceeded" in alert_text.lower():
+                                print("⚠️ Max OTP Limit Reached (2 per hour). Proceeding to use your existing valid OTP from Gmail...")
+                                limit_reached = True
                         except:
-                            print("No alert presented by the website. Assuming OTP was sent silently.")
+                            print("No alert presented by the website.")
+                            
+                        # 🔴 FIX 2: Verify the green "OTP sent" message appeared if we didn't hit the hourly limit
+                        if not limit_reached:
+                            if "OTP sent" not in driver.page_source and "OTP Sent" not in driver.page_source:
+                                raise Exception("Missing 'OTP sent' confirmation. The request failed silently.")
                         
-                        print("Scanning Gmail for the new OTP...")
+                        print("Scanning Gmail for the OTP...")
                         retrieved_otp = fetch_ireps_otp(retries=15)
                         
                         captcha_solved = True
