@@ -28,7 +28,7 @@ WA_LANG = "en"
 SEND_TO_NUMBER = "***REMOVED***"
 
 # Google API Integration Configuration
-BASE_DIR = r"D:\AuctionBot"
+BASE_DIR = r"C:\AuctionBot"
 
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.modify',
