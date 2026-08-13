@@ -301,7 +301,8 @@ def run_catalogues_downloader():
                         
                         time.sleep(6)
                         
-                        # --- NEW: Smart OTP Alert Handler (No Pause) ---
+                        # --- NEW: Smart OTP Alert Handler & Silent Fail Detector ---
+                        limit_reached = False
                         try:
                             alert = driver.switch_to.alert
                             alert_text = alert.text
@@ -310,7 +311,7 @@ def run_catalogues_downloader():
                             if "maximum" in alert_text.lower() or "limit" in alert_text.lower():
                                 print(f"ℹ️ Intercepted: '{alert_text}'.")
                                 print("Proceeding to login using the existing valid OTP from Gmail...")
-                                # We do NOTHING here. The code will naturally drop down to fetch_ireps_otp.
+                                limit_reached = True
                                 
                             elif any(x in alert_text.lower() for x in ["invalid", "wrong", "match"]):
                                 print(f"⚠️ Intercepted Captcha Error: '{alert_text}'. Retrying...")
@@ -319,6 +320,14 @@ def run_catalogues_downloader():
                                 continue
                         except: 
                             pass # No alert present, move on safely
+                        
+                        # 🔴 FIX: If no hourly limit alert, verify the "OTP sent" confirmation appeared
+                        if not limit_reached:
+                            if "OTP sent" not in driver.page_source and "OTP Sent" not in driver.page_source:
+                                print("⚠️ 'OTP sent' confirmation missing! The request failed silently. Refreshing CAPTCHA and retrying...")
+                                driver.find_element(By.XPATH, "//*[contains(@onclick, 'captcha') or contains(@class, 'refresh')]").click()
+                                time.sleep(3)
+                                continue
                         # -----------------------------------------------
                         
                         retrieved_otp = fetch_ireps_otp(creds, retries=15)
