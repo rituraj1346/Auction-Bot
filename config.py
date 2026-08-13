@@ -25,10 +25,10 @@ WA_BUSINESS_ID = "695194337013529"
 WA_TOKEN = "EAAHPINsf7EcBPKiothSx8vR3Kbw5eOUwqxUD3g07A6evEZAoUAFN32cZC6EZAYQuem3QZA4HjmJSzw93VIMAiwbyk0kRKT75VK2qDFvPnUZBZBvEJP59n8wmobSNrpc4qsjl9a8M6ZA1mZBqKHzW91gqZC4FKz2vcMrXtZCjpylxxE9OYEk9ZCV2SolqAUw4rLkwkfRMAZDZD"
 WA_TEMPLATE = "declartion"
 WA_LANG = "en"
-SEND_TO_NUMBER = "918761913078"
+SEND_TO_NUMBER = "918812018662"
 
 # Google API Integration Configuration
-BASE_DIR = r"D:\AuctionBot"
+BASE_DIR = r"C:\AuctionBot"
 
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.modify',
