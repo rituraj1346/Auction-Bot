@@ -1,5 +1,4 @@
 # Security & Credentials (CRITICAL)
-config.py
 token.json
 credentials.json
 .env
