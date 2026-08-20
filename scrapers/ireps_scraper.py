@@ -178,18 +178,23 @@ def run_scraper():
                 time.sleep(5)
                     
                 # ==========================================
-                # 2. MOBILE & CAPTCHA INJECTION
+                # 2. MOBILE & CAPTCHA INJECTION (WITH FULL PAGE REFRESH)
                 # ==========================================
-                print("Injecting Registered Mobile Number...")
-                mobile_xpath = "//input[contains(@name, 'mobile') or contains(@id, 'mobile')]"
-                mobile_input = wait.until(EC.presence_of_element_located((By.XPATH, mobile_xpath)))
-                mobile_input.clear()
-                mobile_input.send_keys(config.IREPS_MOBILE)
-                time.sleep(2)
-
                 captcha_solved = False
-                for captcha_attempt in range(4):
+                retrieved_otp = None
+                
+                for captcha_attempt in range(5):
                     try:
+                        print(f"\n--- Authentication Attempt {captcha_attempt + 1} of 5 ---")
+                        
+                        # 1. Re-inject Mobile Number (Ensures persistence after page refresh)
+                        mobile_xpath = "//input[contains(@name, 'mobile') or contains(@id, 'mobile')]"
+                        mobile_input = wait.until(EC.presence_of_element_located((By.XPATH, mobile_xpath)))
+                        mobile_input.clear()
+                        mobile_input.send_keys(config.IREPS_MOBILE)
+                        time.sleep(1)
+
+                        # 2. Locate and Rip CAPTCHA
                         captcha_xpath = (
                             "//img[contains(translate(@src, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'captcha')] | "
                             "//img[contains(translate(@id, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'captcha')] | "
@@ -198,7 +203,7 @@ def run_scraper():
                         )
                         captcha_img = wait.until(EC.presence_of_element_located((By.XPATH, captcha_xpath)))
                         
-                        print(f"CAPTCHA isolated (Attempt {captcha_attempt + 1}). Ripping pixel data...")
+                        print("Ripping CAPTCHA image data...")
                         js_canvas_rip = """
                             var img = arguments[0];
                             var canvas = document.createElement('canvas');
@@ -211,6 +216,7 @@ def run_scraper():
                         raw_data_url = driver.execute_script(js_canvas_rip, captcha_img)
                         img_base64 = raw_data_url.split(',')[1] 
                         
+                        # 3. Solve with 2Captcha
                         payload = {
                             'key': config.TWOCAPTCHA_API_KEY,
                             'method': 'base64',
@@ -218,8 +224,8 @@ def run_scraper():
                             'json': 1
                         }
                         response = requests.post('http://2captcha.com/in.php', data=payload).json()
-                        
-                        if response.get('status') != 1: raise Exception("2Captcha rejected payload.")
+                        if response.get('status') != 1: 
+                            raise Exception("2Captcha rejected payload.")
                         request_id = response.get('request')
                         
                         captcha_answer = None
@@ -232,68 +238,85 @@ def run_scraper():
                             elif res.get('request') != 'CAPCHA_NOT_READY':
                                 raise Exception("Solver failure.")
                         
-                        if not captcha_answer: raise Exception("2Captcha timeout.")
+                        if not captcha_answer: 
+                            raise Exception("2Captcha timeout.")
                         print(f"Success! CAPTCHA Solved: '{captcha_answer}'")
                         
+                        # 4. Fill CAPTCHA Answer
                         captcha_input_xpath = "//input[contains(translate(@placeholder, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'verification code') or contains(@name, 'captcha')]"
                         captcha_input = driver.find_element(By.XPATH, captcha_input_xpath)
                         captcha_input.clear()
                         captcha_input.send_keys(captcha_answer)
-                        time.sleep(2) 
+                        time.sleep(1) 
                         
-                        print("Clicking 'Get OTP' (Executing native sendOTP() function)...")
+                       # 5. Click 'Get OTP'
+                        print("Clicking 'Get OTP'...")
                         get_otp_btn = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@name='imageField' and @value='Get OTP']")))
                         try:
                             driver.execute_script("sendOTP();")
                         except:
                             driver.execute_script("arguments[0].click();", get_otp_btn)
                         
-                        print("Waiting 6 seconds for the server to process and dispatch the email...")
-                        time.sleep(6)
+                        print("Polling for server response (up to 6 seconds)...")
                         
-                        limit_reached = False
-                        try:
-                            alert = driver.switch_to.alert
-                            alert_text = alert.text
-                            print(f"Server Alert Intercepted: {alert_text}")
-                            alert.accept()
-                            
-                            if "invalid" in alert_text.lower() or "wrong" in alert_text.lower() or "match" in alert_text.lower() or "enter" in alert_text.lower():
-                                print("CAPTCHA was rejected by the server! Refreshing and retrying...")
-                                refresh_btn = driver.find_element(By.XPATH, "//*[contains(@onclick, 'captcha') or contains(@class, 'refresh')]")
-                                driver.execute_script("arguments[0].click();", refresh_btn)
-                                time.sleep(3)
-                                continue
-                            # 🔴 FIX 1: Handle the "Maximum OTP limit exceeded" alert gracefully
-                            elif "maximum" in alert_text.lower() or "limit" in alert_text.lower() or "exceeded" in alert_text.lower():
-                                print("⚠️ Max OTP Limit Reached (2 per hour). Proceeding to use your existing valid OTP from Gmail...")
-                                limit_reached = True
-                        except:
-                            print("No alert presented by the website.")
-                            
-                        # 🔴 FIX 2: Verify the green "OTP sent" message appeared if we didn't hit the hourly limit
-                        if not limit_reached:
-                            if "OTP sent" not in driver.page_source and "OTP Sent" not in driver.page_source:
-                                raise Exception("Missing 'OTP sent' confirmation. The request failed silently.")
+                        # 6. EXACT LOGIC: High-Speed Scanning (Catches disappearing text)
+                        proceed_to_gmail = False
+                        captcha_rejected = False
                         
+                        # Loop 12 times, pausing 0.5 seconds each time (6 seconds total)
+                        for _ in range(12): 
+                            try:
+                                # First, check if an alert popped up
+                                alert = driver.switch_to.alert
+                                alert_text = alert.text
+                                print(f"Server Alert Intercepted: {alert_text}")
+                                alert.accept()
+                                
+                                if "maximum" in alert_text.lower() or "limit" in alert_text.lower() or "exceeded" in alert_text.lower():
+                                    print("⚠️ Max OTP Limit Reached. Proceeding to Gmail...")
+                                    proceed_to_gmail = True
+                                else:
+                                    print("⚠️ Portal rejected the CAPTCHA.")
+                                    captcha_rejected = True
+                                    
+                                break # Exit the 6-second waiting loop immediately
+                            except:
+                                # If no alert, check if the success text is visible right now
+                                visible_page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+                                
+                                if "otp sent" in visible_page_text:
+                                    print("✅ 'OTP sent' confirmation caught on screen!")
+                                    proceed_to_gmail = True
+                                    break # Caught it! Exit the 6-second waiting loop immediately
+                            
+                            # Wait half a second and check again
+                            time.sleep(0.5) 
+                                
+                        # If the 6 seconds ran out and we caught nothing (or caught an error)
+                        if not proceed_to_gmail or captcha_rejected:
+                            if not captcha_rejected:
+                                print("⚠️ 'OTP sent' never appeared. The request failed silently.")
+                            print("Refreshing entire page and retrying...")
+                            driver.refresh()
+                            time.sleep(4)
+                            continue
+                        
+                        # 7. Retrieve OTP from Gmail
                         print("Scanning Gmail for the OTP...")
                         retrieved_otp = fetch_ireps_otp(retries=15)
                         
-                        captcha_solved = True
-                        break
-                        
+                        if retrieved_otp:
+                            captcha_solved = True
+                            break
+                        else:
+                            print("⚠️ OTP email not found in time. Refreshing entire page...")
+                            driver.refresh()
+                            time.sleep(4)
+                            
                     except Exception as e:
-                        print(f"⚠ CAPTCHA/OTP Attempt failed: {e}")
-                        try:
-                            refresh_btn = driver.find_element(By.XPATH, "//*[contains(@onclick, 'captcha') or contains(@class, 'refresh')]")
-                            driver.execute_script("arguments[0].click();", refresh_btn)
-                            time.sleep(3)
-                        except: pass
-
-                if not captcha_solved or not retrieved_otp:
-                    print("CRITICAL FAILURE: Pipeline broke at CAPTCHA/OTP stage. Aborting.")
-                    driver.quit()
-                    return []
+                        print(f"⚠ Cycle attempt failed: {e}. Refreshing page...")
+                        driver.refresh()
+                        time.sleep(4)
 
                 # ==========================================
                 # 3. LIVE OTP INJECTION & SUBMISSION
