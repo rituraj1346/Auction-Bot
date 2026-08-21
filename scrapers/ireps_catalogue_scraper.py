@@ -1,5 +1,12 @@
 # scrapers/ireps_catalogue_scraper.py
 import os
+import sys
+import codecs
+
+# 🔴 Force Windows console to accept emojis and Unicode characters
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+
 import glob
 import time
 import re
@@ -7,6 +14,8 @@ import base64
 import requests
 from datetime import datetime, timedelta
 
+# Google API Imports
+# ... (Keep the rest of your file exactly the same below this!)
 # Google API Imports
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -500,5 +509,9 @@ def run_catalogues_downloader():
                 print(f"Exception sequence fault trapped in runtime loop: {loop_fault}")
                 time.sleep(5)
                 
+    except Exception as fatal_error:
+        print(f"Fatal error in downloader: {fatal_error}")
+        
     finally:
-        driver.quit()
+        if 'driver' in locals():
+            driver.quit()
